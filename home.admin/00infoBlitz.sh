@@ -191,10 +191,10 @@ else
     public_color="${color_red}"
   fi
 
-  # DynDNS
+  # DynDomain
   if [ ${#dynDomain} -gt 0 ]; then
 
-    #check if dyndns resolves to correct IP
+    #check if dynamic domain resolves to correct IP
     ipOfDynDNS=$(getent hosts ${dynDomain} | awk '{ print $1 }')
     if [ "${ipOfDynDNS}:${public_port}" != "${public_addr}" ]; then
       public_color="${color_red}"
@@ -202,8 +202,8 @@ else
       public_color="${color_amber}"
     fi
 
-    # replace IP display with dynDNS
-    public_addr_pre="DynDNS "
+    # replace IP display with dynDN
+    public_addr_pre="DynDN "
     public_addr="${dynDomain}"
   fi
 
@@ -281,6 +281,27 @@ else
   fi
 fi
 
+# show JoinMarket stats in place of the LND URI only if the Yield Generator is running
+source /home/joinmarket/joinin.conf
+if [ $(sudo -u joinmarket pgrep -f "python yg-privacyenhanced.py $YGwallet --wallet-password-stdin" 2>/dev/null | wc -l) -gt 2 ]; then
+  JMstats=$(mktemp 2>/dev/null)
+  sudo -u joinmarket /home/joinmarket/info.stats.sh > $JMstats
+  JMstatsL1=$(sed -n 1p < "$JMstats")
+  JMstatsL2=$(sed -n 2p < "$JMstats")
+  JMstatsL3=$(sed -n 3p < "$JMstats")
+  JMstatsL4=$(sed -n 4p < "$JMstats")
+  lastLine="\
+${color_gray}  _   __   _    
+${color_gray}   \_/  \_/    ${color_gray}$JMstatsL1
+${color_gray}  \ | /\ | /   ${color_gray}$JMstatsL2
+${color_gray}  / | \/ | \   ${color_gray}$JMstatsL3
+${color_gray}  _/^\__/^\_   ${color_gray}$JMstatsL4"
+else
+  lastLine="\
+${color_yellow}
+${color_yellow}${ln_publicColor}${ln_external}${color_gray}"
+fi
+
 sleep 5
 
 ## get uptime and current date & time
@@ -306,8 +327,7 @@ ${color_yellow}   /'          ${color_gray}
 ${color_yellow}               ${color_gray}LND ${color_green}${ln_version} ${ln_baseInfo}
 ${color_yellow}               ${color_gray}${ln_channelInfo} ${ln_peersInfo}
 ${color_yellow}               ${color_gray}${ln_feeReport}
-${color_yellow}
-${color_yellow}${ln_publicColor}${ln_external}${color_gray}
+$lastLine
 " \
 "RaspiBlitz v${codeVersion}" \
 "-------------------------------------------" \

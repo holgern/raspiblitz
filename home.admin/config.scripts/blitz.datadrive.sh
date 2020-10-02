@@ -79,18 +79,37 @@ if [ "$1" = "status" ]; then
     echo "# SETUP INFO"
 
     # find the HDD (biggest single partition)
+    hdd=""
     sizeDataPartition=0
-    lsblk -o NAME,SIZE -b | grep "[^|*][s|v]d[a-z][0-9]" > .lsblk.tmp
+    lsblk -o NAME,SIZE -b | grep -P "[s|v]d[a-z][0-9]?" > .lsblk.tmp
     while read line; do
-      testdevice=$(echo $line | cut -d " " -f 1)
-      testsize=$(echo $line | cut -d " " -f 2)
-      if [ ${testsize} -gt ${sizeDataPartition} ]; then
-        sizeDataPartition=${testsize}
-        hddDataPartition="${testdevice:2:4}"
-        hdd="${hddDataPartition:0:3}"
+
+      # cut line info into different informations
+      testname=$(echo $line | cut -d " " -f 1 | sed 's/[^a-z0-9]*//g')
+      testdevice=$(echo $testname | sed 's/[^a-z]*//g')
+      testpartition=$(echo $testname | grep -P '[a-z]{3,5}[0-9]{1}')
+      testsize=$(echo $line | sed "s/  */ /g" | cut -d " " -f 2 | sed 's/[^0-9]*//g')
+      #echo "# line($line)"
+      #echo "# testname(${testname}) testdevice(${testdevice}) testpartition(${testpartition}) testsize(${testsize})"
+      
+      # if no matching device found yet - take first for the beginning (just in case no partions at all)
+      if [ ${#hdd} -eq 0 ]; then
+        hdd="${testdevice}"
       fi
+      
+      # if a partition was found - make sure to use the biggest
+      if [ ${#testpartition} -gt 0 ] && [ ${testsize} -gt ${sizeDataPartition} ]; then
+        sizeDataPartition=${testsize}
+        hddDataPartition="${testpartition}"
+        hdd="${testdevice}"
+      fi
+      
     done < .lsblk.tmp
     rm -f .lsblk.tmp 1>/dev/null 2>/dev/null
+    if [ ${#hddDataPartition} -lt 4 ]; then
+      echo "# WARNING: found invalid partition (${ddDataPartition}) - redacting"
+      hddDataPartition=""
+    fi
     isSSD=$(sudo cat /sys/block/${hdd}/queue/rotational 2>/dev/null | grep -c 0)
 
     echo "hddCandidate='${hdd}'"
@@ -125,7 +144,7 @@ if [ "$1" = "status" ]; then
         mountError=""
         sudo mkdir -p /mnt/hdd
         if [ "${hddFormat}" = "ext4" ]; then
-	  hddDataPartitionExt4=$hddDataPartition
+	        hddDataPartitionExt4=$hddDataPartition
           mountError=$(sudo mount /dev/${hddDataPartitionExt4} /mnt/hdd 2>&1)
           isTempMounted=$(df | grep /mnt/hdd | grep -c ${hddDataPartitionExt4})
         fi
@@ -330,10 +349,14 @@ if [ "$1" = "format" ]; then
 
   >&2 echo "# Unmounting all partitions of this device"
   # remove device from all system mounts (also fstab)
-  lsblk -o NAME,UUID | grep "${hdd}" | awk '$1=$1' | cut -d " " -f 2 | grep "-" | while read -r uuid ; do
-    >&2 echo "# Cleaning /etc/fstab from ${uuid}"
-    sudo sed -i "/UUID=${uuid}/d" /etc/fstab
-    sync
+  lsblk -o UUID,NAME | grep "${hdd}" | cut -d " " -f 1 | grep "-" | while read -r uuid ; do
+    if [ ${#uuid} -gt 0 ]; then
+      >&2 echo "# Cleaning /etc/fstab from ${uuid}"
+      sudo sed -i "/UUID=${uuid}/d" /etc/fstab
+      sync
+    else
+      >&2 echo "# skipping empty result"
+    fi
   done
   sudo mount -a
 
@@ -344,16 +367,19 @@ if [ "$1" = "format" ]; then
     sudo umount /mnt/storage 2>/dev/null
     unmounted1=$(df | grep -c "/mnt/hdd")
     if [ ${unmounted1} -gt 0 ]; then
+      >&2 echo "# ERROR: failed to unmount /mnt/hdd"
       echo "error='failed to unmount /mnt/hdd'"
       exit 1
     fi
     unmounted2=$(df | grep -c "/mnt/temp")
     if [ ${unmounted2} -gt 0 ]; then
+      >&2 echo "# ERROR: failed to unmount /mnt/temp"
       echo "error='failed to unmount /mnt/temp'"
       exit 1
     fi
     unmounted3=$(df | grep -c "/mnt/storage")
     if [ ${unmounted3} -gt 0 ]; then
+      >&2 echo "# ERROR: failed to unmount /mnt/storage"
       echo "error='failed to unmount /mnt/storage'"
       exit 1
     fi
@@ -362,7 +388,9 @@ if [ "$1" = "format" ]; then
   # wipe all partitions and write fresh GPT
   >&2 echo "# Wiping all partitions (sfdisk/wipefs)"
   sudo sfdisk --delete /dev/${hdd}
+  sleep 4
   sudo wipefs -a /dev/${hdd}
+  sleep 4
   partitions=$(lsblk | grep -c "─${hdd}")
   if [ ${partitions} -gt 0 ]; then
     >&2 echo "# WARNING: partitions are still not clean - try Quick & Dirty"
@@ -370,10 +398,11 @@ if [ "$1" = "format" ]; then
   fi
   partitions=$(lsblk | grep -c "─${hdd}")
   if [ ${partitions} -gt 0 ]; then
+    >&2 echo "# ERROR: partition cleaning failed"
     echo "error='partition cleaning failed'"
     exit 1
   fi
-  sudo parted -s /dev/${hdd} mklabel gpt 1>/dev/null
+  sudo parted -s /dev/${hdd} mklabel gpt 1>/dev/null 1>&2
   sleep 2
   sync
 
@@ -385,7 +414,7 @@ if [ "$1" = "format" ]; then
 
      # write new EXT4 partition
      >&2 echo "# Creating the one big partition"
-     sudo parted /dev/${hdd} mkpart primary ext4 0% 100% 1>/dev/null 2>/dev/null
+     sudo parted /dev/${hdd} mkpart primary ext4 0% 100% 1>&2
      sleep 6
      sync
      # loop until the partion gets available
@@ -399,15 +428,18 @@ if [ "$1" = "format" ]; then
        loopdone=$(lsblk -o NAME | grep -c ${hdd}1)
        loopcount=$(($loopcount +1))
        if [ ${loopcount} -gt 10 ]; then
+         >&2 echo "# partion failed"
          echo "error='partition failed'"
          exit 1
        fi
      done
+     >&2 echo "# partion available"
 
      # make sure /mnt/hdd is unmounted before formatting
      sudo umount -f /tmp/ext4 2>/dev/null
      unmounted=$(df | grep -c "/tmp/ext4")
      if [ ${unmounted} -gt 0 ]; then
+       >&2 echo "# ERROR: failed to unmount /tmp/ext4"
        echo "error='failed to unmount /tmp/ext4'"
        exit 1
      fi
@@ -424,6 +456,7 @@ if [ "$1" = "format" ]; then
        loopdone=$(lsblk -o NAME,LABEL | grep -c BLOCKCHAIN)
        loopcount=$(($loopcount +1))
        if [ ${loopcount} -gt 10 ]; then
+         >&2 echo "# ERROR: formatting ext4 failed"
          echo "error='formatting ext4 failed'"
          exit 1
        fi
@@ -655,7 +688,7 @@ if [ "$1" = "fstab" ]; then
     fi
 
     # remove old entries from fstab
-    lsblk -o NAME,UUID | grep "${hdd}" | awk '$1=$1' | cut -d " " -f 2 | grep "-" | while read -r uuid ; do
+    lsblk -o UUID,NAME | grep "${hdd}" | cut -d " " -f 1 | grep "-" | while read -r uuid ; do
       >&2 echo "# Cleaning /etc/fstab from ${uuid}"
       sudo sed -i "/UUID=${uuid}/d" /etc/fstab
       sync

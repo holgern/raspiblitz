@@ -40,6 +40,15 @@ do
   # gather the uptime seconds
   upSeconds=$(cat /proc/uptime | grep -o '^[0-9]\+')
 
+  # prevent restart if COPY OVER LAN is running
+  # see: https://github.com/rootzoll/raspiblitz/issues/1179#issuecomment-646079467
+  source ${infoFile}
+  if [ "${state}" == "copysource" ]; then 
+    echo "copysource mode: skipping background loop"
+    sleep 10
+    continue
+  fi
+
   ####################################################
   # RECHECK DHCP-SERVER 
   # https://github.com/rootzoll/raspiblitz/issues/160
@@ -107,33 +116,29 @@ do
 
     # execute only after setup when config exists
     if [ ${configExists} -eq 1 ]; then
-
       publicIPChanged=$(/home/admin/config.scripts/internet.sh update-publicip | grep -c 'ip_changed=1')
-      
-      # check if changed
-      elif [ ${publicIPChanged} -get 0 ]; then
+    fi
 
-        # refresh data
-        source /mnt/hdd/raspiblitz.conf
+    # check if changed
+    if [ ${publicIPChanged} -gt 0 ]; then
 
-        # only restart LND if auto-unlock is activated
-        if [ "${autoUnlock}" = "on" ]; then
-          echo "restart LND with to pickup up new publiIP"
-          sudo systemctl stop lnd
-          sudo systemctl start lnd
-        else
-          echo "new publicIP but no LND restart because no auto-unlock"
-        fi
+      # refresh data
+      source /mnt/hdd/raspiblitz.conf
 
-        # trigger update if dnyamic domain (if set)
-        updateDynDomain=1
-
+      # only restart LND if auto-unlock is activated
+      if [ "${autoUnlock}" = "on" ]; then
+        echo "restart LND with to pickup up new publiIP"
+        sudo systemctl stop lnd
+        sudo systemctl start lnd
       else
-        echo "public IP has not changed"
+        echo "new publicIP but no LND restart because no auto-unlock"
       fi
 
+      # trigger update if dnyamic domain (if set)
+      updateDynDomain=1
+
     else
-      echo "skip - because setup is still running"
+        echo "public IP has not changed"
     fi
 
   fi
@@ -146,38 +151,27 @@ do
   recheckBlitzTUI=$(($counter % 30))
   if [ "${touchscreen}" == "1" ] && [ ${recheckBlitzTUI} -eq 1 ]; then
     echo "BlitzTUI Monitoring Check"
-
-    # prevent restart if COPY OVER LAN is running
-    # see: https://github.com/rootzoll/raspiblitz/issues/1179#issuecomment-646079467
-    source ${infoFile}
-    if [ "${state}" == "copysource" ]; then 
-      echo "- skip BlitzTUI check while COPY over LAN is running"
+    if [ -d "/var/cache/raspiblitz" ]; then
+      latestHeartBeatLine=$(sudo tail -n 300 /var/cache/raspiblitz/pi/blitz-tui.log | grep beat | tail -n 1)
     else
-
-      if [ -d "/var/cache/raspiblitz" ]; then
-        latestHeartBeatLine=$(sudo tail -n 300 /var/cache/raspiblitz/pi/blitz-tui.log | grep beat | tail -n 1)
-      else
-        latestHeartBeatLine=$(sudo tail -n 300 /home/pi/blitz-tui.log | grep beat | tail -n 1)
-      fi
-      if [ ${#blitzTUIHeartBeatLine} -gt 0 ]; then
-        #echo "blitzTUIHeartBeatLine(${blitzTUIHeartBeatLine})"
-        #echo "latestHeartBeatLine(${latestHeartBeatLine})"
-        if [ "${blitzTUIHeartBeatLine}" == "${latestHeartBeatLine}" ]; then
-          echo "FAIL - still no new heart beat .. restarting BlitzTUI"
-          blitzTUIRestarts=$(($blitzTUIRestarts +1))
-          if [ $(sudo cat /home/admin/raspiblitz.info | grep -c 'blitzTUIRestarts=') -eq 0 ]; then
-            echo "blitzTUIRestarts=0" >> /home/admin/raspiblitz.info
-          fi
-          sudo sed -i "s/^blitzTUIRestarts=.*/blitzTUIRestarts=${blitzTUIRestarts}/g" /home/admin/raspiblitz.info
-          sudo init 3 ; sleep 2 ; sudo init 5
-        fi
-      else
-        echo "blitzTUIHeartBeatLine is empty - skipping check"
-      fi
-      blitzTUIHeartBeatLine="${latestHeartBeatLine}"
-
+      latestHeartBeatLine=$(sudo tail -n 300 /home/pi/blitz-tui.log | grep beat | tail -n 1)
     fi
-
+    if [ ${#blitzTUIHeartBeatLine} -gt 0 ]; then
+      #echo "blitzTUIHeartBeatLine(${blitzTUIHeartBeatLine})"
+      #echo "latestHeartBeatLine(${latestHeartBeatLine})"
+      if [ "${blitzTUIHeartBeatLine}" == "${latestHeartBeatLine}" ]; then
+        echo "FAIL - still no new heart beat .. restarting BlitzTUI"
+        blitzTUIRestarts=$(($blitzTUIRestarts +1))
+        if [ $(sudo cat /home/admin/raspiblitz.info | grep -c 'blitzTUIRestarts=') -eq 0 ]; then
+          echo "blitzTUIRestarts=0" >> /home/admin/raspiblitz.info
+        fi
+        sudo sed -i "s/^blitzTUIRestarts=.*/blitzTUIRestarts=${blitzTUIRestarts}/g" /home/admin/raspiblitz.info
+        sudo init 3 ; sleep 2 ; sudo init 5
+      fi
+    else
+      echo "blitzTUIHeartBeatLine is empty - skipping check"
+    fi
+    blitzTUIHeartBeatLine="${latestHeartBeatLine}"
   fi
   
   ###############################
