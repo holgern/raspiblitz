@@ -37,8 +37,8 @@ confirmation()
   return $answer
 }
 
-# get the local network IP to be displayed on the lCD
-localip=$(ip addr | grep 'state UP' -A2 | egrep -v 'docker0' | grep 'eth0\|wlan0' | tail -n1 | awk '{print $2}' | cut -f1 -d'/')
+# get the local network IP to be displayed on the LCD
+localip=$(ip addr | grep 'state UP' -A2 | egrep -v 'docker0|veth' | grep 'eth0\|wlan0\|enp0' | tail -n1 | awk '{print $2}' | cut -f1 -d'/')
 
 # BASIC MENU INFO
 HEIGHT=17
@@ -82,6 +82,9 @@ if [ "${lndmanage}" == "on" ]; then
 fi
 if [ "${loop}" == "on" ]; then
   OPTIONS+=(LOOP "Loop In/Out Service")
+fi
+if [ "${mempoolExplorer}" == "on" ]; then
+  OPTIONS+=(MEMPOOL "Mempool Space")
 fi
 if [ "${specter}" == "on" ]; then
   OPTIONS+=(SPECTER "Cryptoadvance Specter")
@@ -165,9 +168,11 @@ case $CHOICE in
                 # show the same info as on LCD screen
                 /home/admin/00infoBlitz.sh
 
-                # wait 2 seconds for key input
-                echo "Screen is updating in loop .... keep 'x' pressed to exit to menu."
-                read -n 1 -t 2 keyPressed
+                # wait 6 seconds for user exiting loop
+                echo ""
+                echo -en "Screen is updating in a loop .... press 'x' now to get back to menu."
+                read -n 1 -t 6 keyPressed
+                echo -en "\rGathering information to update info ... please wait.                \n"  
 
                 # check if user wants to abort session
                 if [ "${keyPressed}" = "x" ]; then
@@ -210,6 +215,9 @@ case $CHOICE in
             ;;
         LOOP)
             /home/admin/config.scripts/bonus.loop.sh menu
+            ;;
+        MEMPOOL)
+            /home/admin/config.scripts/bonus.mempool.sh menu
             ;;
         SPECTER)
             /home/admin/config.scripts/bonus.cryptoadvance-specter.sh menu
