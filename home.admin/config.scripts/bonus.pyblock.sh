@@ -36,7 +36,7 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   
   echo "*** INSTALL pyblocks***"
   
-  # create bos user
+  # create pyblock user
   sudo adduser --disabled-password --gecos "" pyblock
 
   
@@ -79,7 +79,7 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   ## pyblock short command
   sudo bash -c "echo 'alias pyblock=\"cd ~; python3 ~/PyBLOCK/PyBlock.py\"' >> /home/pyblock/.bashrc"
   
-  echo "# Usage: https://github.com/alexbosworth/balanceofsatoshis/blob/master/README.md"
+  echo "# Usage: https://github.com/curly60e/pyblock/blob/master/README.md"
   echo "# To start type: 'sudo su pyblock' in the command line."
   echo "# Then pyblock"
   echo "# To exit the user - type 'exit' and press ENTER"
@@ -104,7 +104,8 @@ fi
 if [ "$1" = "update" ]; then
   echo "*** UPDATING PyBLOCK ***"
   cd /home/pyblock/PyBLOCK
-  sudo -u pyblock git update
+  sudo -u pyblock git pull
+  sudo -u pyblock pip3 install -r requirements.txt
   echo "*** Updated to the latest in https://github.com/curly60e/pyblock ***"
   exit 0
 fi
