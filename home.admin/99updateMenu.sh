@@ -13,11 +13,11 @@ release()
 
 - Download the new SD card image to your laptop:
   https://github.com/rootzoll/raspiblitz
-- Flash that SD card image to a new SD card
+- Flash that SD card image to a new SD card (best)
+  or override old SD card after shutdown (fallback) 
 - Choose 'Start Update' below.
 
 No need to close channels or download blockchain again.
-
 Do you want to start the Update now?
       " 16 62
   if [ $? -eq 0 ]; then
@@ -297,6 +297,15 @@ fi
 if [ "${pyblock}" == "on" ]; then
   OPTIONS+=(PYBLOCK "Update PyBLOCK")
 fi
+if [ "${pool}" == "on" ]; then
+  OPTIONS+=(POOL "Update Lightning Pool")
+fi
+if [ "${loop}" == "on" ]; then
+  OPTIONS+=(LOOP "Update Lightning Loop")
+fi
+if [ "${runBehindTor}" == "on" ]; then
+  OPTIONS+=(TOR "Update Tor from the source code")
+fi
 
 CHOICE=$(whiptail --clear --title "Update Options" --menu "" 13 55 6 "${OPTIONS[@]}" 2>&1 >/dev/tty)
 
@@ -326,5 +335,14 @@ case $CHOICE in
     ;;
   PYBLOCK)
     /home/admin/config.scripts/bonus.pyblock.sh update
+    ;;
+  POOL)
+    /home/admin/config.scripts/bonus.pool.sh update  
+    ;;
+  LOOP)
+    /home/admin/config.scripts/bonus.loop.sh update  
+    ;;
+  TOR)
+    sudo /home/admin/config.scripts/internet.tor.sh update  
     ;;
 esac

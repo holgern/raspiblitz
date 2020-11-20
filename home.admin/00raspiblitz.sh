@@ -33,6 +33,10 @@ if [ ${isMounted} -eq 0 ] && [ ${#hddCandidate} -eq 0 ]; then
       echo "a VDI with a presynced blockchain to speed up setup. If you dont have 900GB"
       echo "space on your laptop you can store the VDI file on an external drive."
       echo "***********************************************************"
+    else
+      echo "If HDD is connected - please report the result of the following command:"
+      echo "sudo /home/admin/config.scripts/blitz.datadrive.sh status"
+      echo "***********************************************************"
     fi
     exit
 fi
@@ -64,6 +68,14 @@ if [ "${state}" = "copysource" ]; then
   echo "a) continue/check progress with command: sourcemode"
   echo "b) return to normal mode with command: restart"
   echo "***********************************************************"
+  exit
+fi
+
+# check if copy blockchain over LAN to this RaspiBlitz was running
+source <(/home/admin/config.scripts/blitz.copyblockchain.sh status)
+if [ "${copyInProgress}" = "1" ]; then
+  echo "Detected interrupted COPY blochain process ..."
+  /home/admin/50copyHDD.sh
   exit
 fi
 

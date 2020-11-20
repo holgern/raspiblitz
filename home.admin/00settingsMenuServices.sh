@@ -20,6 +20,8 @@ if [ ${#faraday} -eq 0 ]; then faraday="off"; fi
 if [ ${#bos} -eq 0 ]; then bos="off"; fi
 if [ ${#pyblock} -eq 0 ]; then pyblock="off"; fi
 if [ ${#thunderhub} -eq 0 ]; then thunderhub="off"; fi
+if [ ${#pool} -eq 0 ]; then pool="off"; fi
+if [ ${#sphinxrelay} -eq 0 ]; then sphinxrelay="off"; fi
 
 # show select dialog
 echo "run dialog ..."
@@ -36,9 +38,11 @@ OPTIONS+=(a 'Mempool Explorer' ${mempoolExplorer})
 OPTIONS+=(j 'JoinMarket' ${joinmarket})
 OPTIONS+=(l 'Lightning Loop' ${loop})
 OPTIONS+=(o 'Balance of Satoshis' ${bos})
-OPTIONS+=(y 'PyBLOCK' ${pyblock})
 OPTIONS+=(f 'Faraday' ${faraday})
+OPTIONS+=(c 'Lightning Pool' ${pool})
+OPTIONS+=(y 'PyBLOCK' ${pyblock})
 OPTIONS+=(m 'lndmanage' ${lndmanage})
+OPTIONS+=(x 'Sphinx-Relay' ${sphinxrelay})
 
 CHOICES=$(dialog --title ' Additional Services ' --checklist ' use spacebar to activate/de-activate ' 20 45 12  "${OPTIONS[@]}" 2>&1 >/dev/tty)
 
@@ -347,6 +351,34 @@ else
   echo "LNbits setting unchanged."
 fi
 
+# Lightning Pool
+choice="off"; check=$(echo "${CHOICES}" | grep -c "c")
+if [ ${check} -eq 1 ]; then choice="on"; fi
+if [ "${pool}" != "${choice}" ]; then
+  echo "Pool Setting changed .."
+  anychange=1
+  sudo -u admin /home/admin/config.scripts/bonus.pool.sh ${choice}
+  if [ "${choice}" =  "on" ]; then
+    sudo -u admin /home/admin/config.scripts/bonus.pool.sh menu
+  fi
+else
+  echo "Pool setting unchanged."
+fi
+
+# Sphinx Relay
+choice="off"; check=$(echo "${CHOICES}" | grep -c "x")
+if [ ${check} -eq 1 ]; then choice="on"; fi
+if [ "${sphinxrelay}" != "${choice}" ]; then
+  echo "Sphinx-Relay Setting changed .."
+  anychange=1
+  sudo -u admin /home/admin/config.scripts/bonus.sphinxrelay.sh ${choice}
+  if [ "${choice}" =  "on" ]; then
+    sudo -u admin /home/admin/config.scripts/bonus.sphinxrelay.sh menu
+  fi
+else
+  echo "Sphinx Relay unchanged."
+fi
+
 # JoinMarket process choice
 choice="off"; check=$(echo "${CHOICES}" | grep -c "j")
 if [ ${check} -eq 1 ]; then choice="on"; fi
@@ -390,7 +422,7 @@ if [ "${mempoolExplorer}" != "${choice}" ]; then
       whiptail --title " Installed Mempool Space " --msgbox "\
 The txindex may need to be created before Mempool can be active.\n
 This can take ~7 hours on a RPi4 with SSD. Monitor the progress on the LCD.\n
-When finished use the new 'EXPLORE' entry in Main Menu for more info.\n
+When finished use the new 'MEMPOOL' entry in Main Menu for more info.\n
 " 14 50
     else
       l1="!!! FAIL on Mempool Explorer install !!!"
